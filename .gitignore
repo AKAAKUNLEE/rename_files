@@ -20,7 +20,7 @@ build/
 *.spec           # PyInstaller 生成的 spec 文件
 /pyi-*           # PyInstaller 临时文件
 _MEIPASS2/       # PyInstaller 临时目录
-
+文件重命名工具.spec
 # ==============================
 # 虚拟环境
 # ==============================
