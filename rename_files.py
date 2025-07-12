@@ -30,9 +30,24 @@ class RenameThread(QThread):
         self.mode = mode
         self.recursive = recursive
         self.dry_run = dry_run
-        self.old_str = '-part' if mode == 'to-dot' else '.part'
-        self.new_str = '.part' if mode == 'to-dot' else '-part'
-        self.mode_desc = "将 '-part' 替换为 '.part'" if mode == 'to-dot' else "将 '.part' 替换为 '-part'"
+        
+        # 根据模式设置替换规则
+        if mode == 'to-dot':
+            self.old_str = '-part'
+            self.new_str = '.part'
+            self.mode_desc = "将 '-part' 替换为 '.part'"
+        elif mode == 'to-dash':
+            self.old_str = '.part'
+            self.new_str = '-part'
+            self.mode_desc = "将 '.part' 替换为 '-part'"
+        elif mode == 'rev-to-rar':
+            self.old_str = '.part'  # 用于匹配 .part01.rev
+            self.new_str = '-part'  # 用于替换为 -part01.rar
+            self.mode_desc = "将 '.partXX.rev' 替换为 '-partXX.rar'"
+        elif mode == 'rar-to-rev':
+            self.old_str = '-part'  # 用于匹配 -part01.rar
+            self.new_str = '.part'  # 用于替换为 .part01.rev
+            self.mode_desc = "将 '-partXX.rar' 替换为 '.partXX.rev'"
         
     def run(self):
         renamed_count = 0
@@ -56,29 +71,77 @@ class RenameThread(QThread):
                 for filename in files:
                     old_name = os.path.join(root, filename)
                     
-                    # 检查是否包含目标字符串
-                    if self.old_str in filename:
-                        new_filename = filename.replace(self.old_str, self.new_str)
-                        new_name = os.path.join(root, new_filename)
-                        
-                        # 避免自身重命名
-                        if new_name == old_name:
-                            skipped_count += 1
-                            continue
+                    # 根据不同模式执行不同的替换逻辑
+                    if self.mode in ['to-dot', 'to-dash']:
+                        # 简单替换 -part 和 .part
+                        if self.old_str in filename:
+                            new_filename = filename.replace(self.old_str, self.new_str)
+                            new_name = os.path.join(root, new_filename)
                             
-                        # 执行重命名或仅显示操作
-                        try:
-                            if self.dry_run:
-                                log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
-                                self.log_signal.emit(log_msg)
-                            else:
-                                os.rename(old_name, new_name)
-                                self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
-                                renamed_count += 1
-                        except Exception as e:
-                            self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
-                    else:
-                        skipped_count += 1
+                            # 避免自身重命名
+                            if new_name == old_name:
+                                skipped_count += 1
+                                continue
+                                
+                            # 执行重命名或仅显示操作
+                            try:
+                                if self.dry_run:
+                                    log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
+                                    self.log_signal.emit(log_msg)
+                                else:
+                                    os.rename(old_name, new_name)
+                                    self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
+                                    renamed_count += 1
+                            except Exception as e:
+                                self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                        else:
+                            skipped_count += 1
+                    
+                    elif self.mode in ['rev-to-rar', 'rar-to-rev']:
+                        # 复杂替换：.part01.rev ↔ -part01.rar
+                        if self.mode == 'rev-to-rar' and filename.endswith('.rev') and self.old_str in filename:
+                            # 从 .part01.rev 转换为 -part01.rar
+                            base_part = filename.rsplit('.', 2)[0]  # 获取 "filename.part01"
+                            new_filename = base_part.replace(self.old_str, self.new_str) + '.rar'
+                            new_name = os.path.join(root, new_filename)
+                            
+                            if new_name == old_name:
+                                skipped_count += 1
+                                continue
+                                
+                            try:
+                                if self.dry_run:
+                                    log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
+                                    self.log_signal.emit(log_msg)
+                                else:
+                                    os.rename(old_name, new_name)
+                                    self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
+                                    renamed_count += 1
+                            except Exception as e:
+                                self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                        
+                        elif self.mode == 'rar-to-rev' and filename.endswith('.rar') and self.old_str in filename:
+                            # 从 -part01.rar 转换为 .part01.rev
+                            base_part = filename.rsplit('.', 1)[0]  # 获取 "filename-part01"
+                            new_filename = base_part.replace(self.old_str, self.new_str) + '.rev'
+                            new_name = os.path.join(root, new_filename)
+                            
+                            if new_name == old_name:
+                                skipped_count += 1
+                                continue
+                                
+                            try:
+                                if self.dry_run:
+                                    log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
+                                    self.log_signal.emit(log_msg)
+                                else:
+                                    os.rename(old_name, new_name)
+                                    self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
+                                    renamed_count += 1
+                            except Exception as e:
+                                self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                        else:
+                            skipped_count += 1
             
             # 输出统计信息
             self.log_signal.emit("-" * 50)
@@ -288,6 +351,8 @@ class FileRenamerApp(AcrylicWidget):
         
         self.to_dot_radio = QRadioButton("将 '-part' 替换为 '.part'")
         self.to_dash_radio = QRadioButton("将 '.part' 替换为 '-part'")
+        self.rev_to_rar_radio = QRadioButton("将 '.partXX.rev' 替换为 '-partXX.rar'")
+        self.rar_to_rev_radio = QRadioButton("将 '-partXX.rar' 替换为 '.partXX.rev'")
         
         self.to_dot_radio.setChecked(True)
         
@@ -311,9 +376,13 @@ class FileRenamerApp(AcrylicWidget):
         """
         self.to_dot_radio.setStyleSheet(radio_style)
         self.to_dash_radio.setStyleSheet(radio_style)
+        self.rev_to_rar_radio.setStyleSheet(radio_style)
+        self.rar_to_rev_radio.setStyleSheet(radio_style)
         
         mode_layout.addWidget(self.to_dot_radio)
         mode_layout.addWidget(self.to_dash_radio)
+        mode_layout.addWidget(self.rev_to_rar_radio)
+        mode_layout.addWidget(self.rar_to_rev_radio)
         
         mode_group.setLayout(mode_layout)
         self.main_layout.addWidget(mode_group)
@@ -463,7 +532,16 @@ class FileRenamerApp(AcrylicWidget):
     def start_rename(self):
         """开始重命名操作"""
         directory = self.dir_path.text()
-        mode = 'to-dot' if self.to_dot_radio.isChecked() else 'to-dash'
+        # 根据选中的单选按钮确定重命名模式
+        if self.to_dot_radio.isChecked():
+            mode = 'to-dot'
+        elif self.to_dash_radio.isChecked():
+            mode = 'to-dash'
+        elif self.rev_to_rar_radio.isChecked():
+            mode = 'rev-to-rar'
+        elif self.rar_to_rev_radio.isChecked():
+            mode = 'rar-to-rev'
+        
         recursive = self.recursive_check.isChecked()
         dry_run = self.dry_run_check.isChecked()
         
