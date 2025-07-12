@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                             QRadioButton, QCheckBox, QFileDialog, QTextEdit, 
                             QStatusBar, QGroupBox, QMessageBox, QGraphicsBlurEffect)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QTimer, QRect
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QTimer, QRect, QRectF
 from PyQt5.QtGui import (QFont, QColor, QPalette, QPainter, QPen, QBrush, 
                         QIcon, QPixmap, QLinearGradient, QPainterPath, QRegion)
 
@@ -110,7 +110,8 @@ class AcrylicWidget(QWidget):
         
         # 创建路径并绘制亚克力背景
         path = QPainterPath()
-        path.addRoundedRect(QRect(0, 0, self.width(), self.height()), 
+        # 使用QRectF替代QRect以解决类型错误
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 
                            self.border_radius, self.border_radius)
         
         # 绘制半透明背景
