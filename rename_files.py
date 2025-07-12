@@ -282,17 +282,22 @@ class FileRenamerApp(AcrylicWidget):
         
         self.to_dot_radio.setChecked(True)
         
-        # 设置单选按钮样式
+        # 修复单选按钮样式，使用系统默认图标
         radio_style = """
             QRadioButton::indicator {
-                width: 16px;
-                height: 16px;
+                width: 18px;
+                height: 18px;
             }
             QRadioButton::indicator:checked {
-                image: url(:/icons/radio-checked.png);
+                border-radius: 9px;
+                background-color: #4a69bd;
+                border: 2px solid white;
+                width: 14px;
+                height: 14px;
             }
             QRadioButton::indicator:unchecked {
-                image: url(:/icons/radio-unchecked.png);
+                border-radius: 9px;
+                border: 2px solid #4a69bd;
             }
         """
         self.to_dot_radio.setStyleSheet(radio_style)
@@ -329,17 +334,17 @@ class FileRenamerApp(AcrylicWidget):
         self.dry_run_check = QCheckBox("模拟运行（不实际修改文件）")
         self.dry_run_check.setChecked(True)
         
-        # 设置复选框样式
+        # 修复复选框样式，使用系统默认图标
         check_style = """
             QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
+                width: 18px;
+                height: 18px;
             }
             QCheckBox::indicator:checked {
-                image: url(:/icons/check-checked.png);
+                image: url(:/qt-project.org/styles/commonstyle/images/checkbox-checked.png);
             }
             QCheckBox::indicator:unchecked {
-                image: url(:/icons/check-unchecked.png);
+                image: url(:/qt-project.org/styles/commonstyle/images/checkbox-unchecked.png);
             }
         """
         self.recursive_check.setStyleSheet(check_style)
