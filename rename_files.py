@@ -1,160 +1,54 @@
 import os
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-from pathlib import Path
-import threading
+import sys
+import time
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                            QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+                            QRadioButton, QCheckBox, QFileDialog, QTextEdit, 
+                            QStatusBar, QGroupBox, QMessageBox)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont
 
-class FileRenamerApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("文件重命名工具")
-        self.root.geometry("600x400")
-        self.root.resizable(True, True)
-        
-        # 设置中文字体
-        self.style = ttk.Style()
-        self.style.configure("TLabel", font=("SimHei", 10))
-        self.style.configure("TButton", font=("SimHei", 10))
-        self.style.configure("TCheckbutton", font=("SimHei", 10))
-        
-        # 创建主框架
-        main_frame = ttk.Frame(root, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 源目录选择
-        ttk.Label(main_frame, text="选择目录:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        
-        # 获取程序所在目录作为默认值
-        self.default_dir = os.path.dirname(os.path.abspath(__file__))
-        self.dir_var = tk.StringVar(value=self.default_dir)
-        
-        dir_entry = ttk.Entry(main_frame, textvariable=self.dir_var, width=50)
-        dir_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
-        
-        browse_btn = ttk.Button(main_frame, text="浏览...", command=self.browse_directory)
-        browse_btn.grid(row=0, column=2, padx=5, pady=5)
-        
-        # 重命名模式选择
-        ttk.Label(main_frame, text="重命名模式:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        
-        self.mode_var = tk.StringVar(value="to-dot")
-        
-        to_dot_radio = ttk.Radiobutton(main_frame, text="将 '-part' 替换为 '.part'", 
-                                     variable=self.mode_var, value="to-dot")
-        to_dot_radio.grid(row=1, column=1, sticky=tk.W, pady=5)
-        
-        to_dash_radio = ttk.Radiobutton(main_frame, text="将 '.part' 替换为 '-part'", 
-                                      variable=self.mode_var, value="to-dash")
-        to_dash_radio.grid(row=2, column=1, sticky=tk.W, pady=5)
-        
-        # 选项
-        options_frame = ttk.LabelFrame(main_frame, text="选项", padding="10")
-        options_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
-        
-        self.recursive_var = tk.BooleanVar(value=False)
-        recursive_check = ttk.Checkbutton(options_frame, text="递归处理子目录", 
-                                        variable=self.recursive_var)
-        recursive_check.pack(side=tk.LEFT, padx=10)
-        
-        self.dry_run_var = tk.BooleanVar(value=True)
-        dry_run_check = ttk.Checkbutton(options_frame, text="模拟运行（不实际修改文件）", 
-                                       variable=self.dry_run_var)
-        dry_run_check.pack(side=tk.LEFT, padx=10)
-        
-        # 按钮
-        buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=3, pady=15)
-        
-        self.rename_btn = ttk.Button(buttons_frame, text="开始重命名", 
-                                    command=self.start_rename, width=15)
-        self.rename_btn.pack(side=tk.LEFT, padx=10)
-        
-        ttk.Button(buttons_frame, text="退出", command=root.quit, width=10).pack(side=tk.LEFT)
-        
-        # 进度和日志
-        ttk.Label(main_frame, text="操作日志:").grid(row=5, column=0, sticky=tk.W, pady=5)
-        
-        self.log_text = tk.Text(main_frame, height=10, width=70, wrap=tk.WORD)
-        self.log_text.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
-        
-        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        scrollbar.grid(row=6, column=3, sticky=(tk.N, tk.S))
-        self.log_text.config(yscrollcommand=scrollbar.set)
-        
-        # 状态栏
-        self.status_var = tk.StringVar(value="就绪")
-        status_bar = ttk.Label(root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # 初始化日志
-        self.log("欢迎使用文件重命名工具")
-        self.log(f"默认目录: {self.default_dir}")
-        self.log("请选择重命名模式，然后点击'开始重命名'按钮")
+class RenameThread(QThread):
+    """文件重命名线程，用于后台执行重命名操作，避免界面卡顿"""
+    log_signal = pyqtSignal(str)
+    status_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal(int, int)
     
-    def browse_directory(self):
-        """浏览并选择目录"""
-        directory = filedialog.askdirectory(initialdir=self.dir_var.get(), 
-                                           title="选择目录")
-        if directory:
-            self.dir_var.set(directory)
-    
-    def log(self, message):
-        """添加日志到文本框"""
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
-    
-    def update_status(self, message):
-        """更新状态栏"""
-        self.status_var.set(message)
-    
-    def rename_files(self):
-        """执行文件重命名操作"""
-        directory = self.dir_var.get()
-        mode = self.mode_var.get()
-        recursive = self.recursive_var.get()
-        dry_run = self.dry_run_var.get()
+    def __init__(self, directory, mode, recursive, dry_run):
+        super().__init__()
+        self.directory = directory
+        self.mode = mode
+        self.recursive = recursive
+        self.dry_run = dry_run
+        self.old_str = '-part' if mode == 'to-dot' else '.part'
+        self.new_str = '.part' if mode == 'to-dot' else '-part'
+        self.mode_desc = "将 '-part' 替换为 '.part'" if mode == 'to-dot' else "将 '.part' 替换为 '-part'"
         
-        # 检查目录是否存在
-        if not os.path.isdir(directory):
-            messagebox.showerror("错误", f"指定的目录不存在: {directory}")
-            self.rename_btn.config(state=tk.NORMAL)
-            self.update_status("就绪")
-            return
+    def run(self):
+        renamed_count = 0
+        skipped_count = 0
+        
+        self.log_signal.emit(f"\n开始在目录 '{self.directory}' 中执行重命名操作...")
+        self.log_signal.emit(f"模式: {self.mode_desc}")
+        self.log_signal.emit(f"递归: {self.recursive}")
+        self.log_signal.emit(f"模拟运行: {self.dry_run}")
+        self.log_signal.emit("-" * 50)
         
         try:
-            self.log(f"\n开始在目录 '{directory}' 中执行重命名操作...")
-            
-            # 根据模式设置替换规则
-            if mode == 'to-dot':
-                old_str, new_str = '-part', '.part'
-                mode_desc = "将 '-part' 替换为 '.part'"
-            else:  # to-dash
-                old_str, new_str = '.part', '-part'
-                mode_desc = "将 '.part' 替换为 '-part'"
-            
-            self.log(f"模式: {mode_desc}")
-            self.log(f"递归: {recursive}")
-            self.log(f"模拟运行: {dry_run}")
-            self.log("-" * 50)
-            
-            # 计数器
-            renamed_count = 0
-            skipped_count = 0
-            
             # 遍历目录
-            if recursive:
+            if self.recursive:
                 walk_func = os.walk
             else:
                 def walk_func(path):
                     yield next(os.walk(path))
             
-            for root, _, files in walk_func(directory):
+            for root, _, files in walk_func(self.directory):
                 for filename in files:
                     old_name = os.path.join(root, filename)
                     
                     # 检查是否包含目标字符串
-                    if old_str in filename:
-                        new_filename = filename.replace(old_str, new_str)
+                    if self.old_str in filename:
+                        new_filename = filename.replace(self.old_str, self.new_str)
                         new_name = os.path.join(root, new_filename)
                         
                         # 避免自身重命名
@@ -164,48 +58,217 @@ class FileRenamerApp:
                             
                         # 执行重命名或仅显示操作
                         try:
-                            if dry_run:
+                            if self.dry_run:
                                 log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
-                                self.log(log_msg)
+                                self.log_signal.emit(log_msg)
                             else:
                                 os.rename(old_name, new_name)
-                                self.log(f"已重命名: {filename} -> {new_filename}")
+                                self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
                                 renamed_count += 1
                         except Exception as e:
-                            self.log(f"错误: 无法重命名 '{filename}': {str(e)}")
+                            self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
                     else:
                         skipped_count += 1
             
             # 输出统计信息
-            self.log("-" * 50)
-            self.log(f"{mode_desc}操作完成:")
-            self.log(f"已重命名的文件: {renamed_count}")
-            self.log(f"未修改的文件: {skipped_count}")
+            self.log_signal.emit("-" * 50)
+            self.log_signal.emit(f"{self.mode_desc}操作完成:")
+            self.log_signal.emit(f"已重命名的文件: {renamed_count}")
+            self.log_signal.emit(f"未修改的文件: {skipped_count}")
             
-            if dry_run:
-                self.log("\n提示: 当前为模拟运行模式，未实际修改任何文件。")
-                self.log("若要执行实际重命名，请取消'模拟运行'选项。")
+            if self.dry_run:
+                self.log_signal.emit("\n提示: 当前为模拟运行模式，未实际修改任何文件。")
+                self.log_signal.emit("若要执行实际重命名，请取消'模拟运行'选项。")
             
-            self.update_status(f"操作完成: 重命名 {renamed_count} 个文件")
+            self.status_signal.emit(f"操作完成: 重命名 {renamed_count} 个文件")
+            self.finished_signal.emit(renamed_count, skipped_count)
             
         except Exception as e:
-            self.log(f"错误: {str(e)}")
-            self.update_status(f"操作失败: {str(e)}")
-        finally:
-            self.rename_btn.config(state=tk.NORMAL)
+            self.log_signal.emit(f"错误: {str(e)}")
+            self.status_signal.emit(f"操作失败: {str(e)}")
+
+class FileRenamerApp(QMainWindow):
+    """文件重命名工具主窗口"""
+    def __init__(self):
+        super().__init__()
+        
+        # 设置窗口标题和大小
+        self.setWindowTitle("文件重命名工具")
+        self.setGeometry(100, 100, 700, 500)
+        
+        # 设置中文字体
+        font = QFont()
+        font.setFamily("SimHei")
+        font.setPointSize(10)
+        self.setFont(font)
+        
+        # 创建中心部件和布局
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+        
+        # 创建状态栏
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.statusBar.showMessage("就绪")
+        
+        # 创建UI组件
+        self.create_directory_section()
+        self.create_mode_section()
+        self.create_options_section()
+        self.create_log_section()
+        self.create_buttons_section()
+        
+        # 初始化
+        self.rename_thread = None
+        self.default_dir = os.path.dirname(os.path.abspath(__file__))
+        self.dir_path.setText(self.default_dir)
+        self.log_text.append("欢迎使用文件重命名工具")
+        self.log_text.append(f"默认目录: {self.default_dir}")
+        self.log_text.append("请选择重命名模式，然后点击'开始重命名'按钮")
+    
+    def create_directory_section(self):
+        """创建目录选择部分"""
+        dir_layout = QHBoxLayout()
+        
+        self.dir_label = QLabel("选择目录:")
+        self.dir_path = QLineEdit()
+        self.browse_btn = QPushButton("浏览...")
+        self.browse_btn.clicked.connect(self.browse_directory)
+        
+        dir_layout.addWidget(self.dir_label)
+        dir_layout.addWidget(self.dir_path, 1)
+        dir_layout.addWidget(self.browse_btn)
+        
+        self.main_layout.addLayout(dir_layout)
+    
+    def create_mode_section(self):
+        """创建重命名模式选择部分"""
+        mode_group = QGroupBox("重命名模式")
+        mode_layout = QVBoxLayout()
+        
+        self.to_dot_radio = QRadioButton("将 '-part' 替换为 '.part'")
+        self.to_dash_radio = QRadioButton("将 '.part' 替换为 '-part'")
+        
+        self.to_dot_radio.setChecked(True)
+        
+        mode_layout.addWidget(self.to_dot_radio)
+        mode_layout.addWidget(self.to_dash_radio)
+        
+        mode_group.setLayout(mode_layout)
+        self.main_layout.addWidget(mode_group)
+    
+    def create_options_section(self):
+        """创建选项部分"""
+        options_group = QGroupBox("选项")
+        options_layout = QHBoxLayout()
+        
+        self.recursive_check = QCheckBox("递归处理子目录")
+        self.dry_run_check = QCheckBox("模拟运行（不实际修改文件）")
+        self.dry_run_check.setChecked(True)
+        
+        options_layout.addWidget(self.recursive_check)
+        options_layout.addWidget(self.dry_run_check)
+        
+        options_group.setLayout(options_layout)
+        self.main_layout.addWidget(options_group)
+    
+    def create_log_section(self):
+        """创建日志显示部分"""
+        log_layout = QVBoxLayout()
+        
+        self.log_label = QLabel("操作日志:")
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setMinimumHeight(200)
+        
+        log_layout.addWidget(self.log_label)
+        log_layout.addWidget(self.log_text)
+        
+        self.main_layout.addLayout(log_layout)
+    
+    def create_buttons_section(self):
+        """创建按钮部分"""
+        buttons_layout = QHBoxLayout()
+        
+        self.rename_btn = QPushButton("开始重命名")
+        self.rename_btn.setMinimumHeight(40)
+        self.rename_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.rename_btn.clicked.connect(self.start_rename)
+        
+        self.exit_btn = QPushButton("退出")
+        self.exit_btn.setMinimumHeight(40)
+        self.exit_btn.setStyleSheet("background-color: #f44336; color: white; font-weight: bold;")
+        self.exit_btn.clicked.connect(self.close)
+        
+        buttons_layout.addStretch(1)
+        buttons_layout.addWidget(self.rename_btn)
+        buttons_layout.addWidget(self.exit_btn)
+        buttons_layout.addStretch(1)
+        
+        self.main_layout.addLayout(buttons_layout)
+    
+    def browse_directory(self):
+        """浏览并选择目录"""
+        directory = QFileDialog.getExistingDirectory(
+            self, "选择目录", self.dir_path.text(), QFileDialog.ShowDirsOnly
+        )
+        
+        if directory:
+            self.dir_path.setText(directory)
+    
+    def log_message(self, message):
+        """添加日志消息"""
+        self.log_text.append(message)
+        # 滚动到底部
+        self.log_text.moveCursor(self.log_text.textCursor().End)
+    
+    def update_status(self, message):
+        """更新状态栏消息"""
+        self.statusBar.showMessage(message)
     
     def start_rename(self):
-        """开始重命名线程"""
-        self.log_text.delete(1.0, tk.END)  # 清空日志
-        self.rename_btn.config(state=tk.DISABLED)
-        self.update_status("正在处理...")
+        """开始重命名操作"""
+        directory = self.dir_path.text()
+        mode = 'to-dot' if self.to_dot_radio.isChecked() else 'to-dash'
+        recursive = self.recursive_check.isChecked()
+        dry_run = self.dry_run_check.isChecked()
         
-        # 在单独的线程中执行重命名，避免界面卡顿
-        thread = threading.Thread(target=self.rename_files)
-        thread.daemon = True
-        thread.start()
+        # 检查目录是否存在
+        if not os.path.isdir(directory):
+            QMessageBox.critical(self, "错误", f"指定的目录不存在: {directory}")
+            return
+        
+        # 清空日志
+        self.log_text.clear()
+        
+        # 创建并启动重命名线程
+        self.rename_thread = RenameThread(directory, mode, recursive, dry_run)
+        self.rename_thread.log_signal.connect(self.log_message)
+        self.rename_thread.status_signal.connect(self.update_status)
+        self.rename_thread.finished_signal.connect(self.on_rename_finished)
+        self.rename_thread.start()
+        
+        # 更新UI状态
+        self.rename_btn.setEnabled(False)
+        self.update_status("正在处理...")
+    
+    def on_rename_finished(self, renamed_count, skipped_count):
+        """重命名完成后的回调函数"""
+        self.rename_btn.setEnabled(True)
+        
+        # 显示操作结果对话框
+        result_msg = f"操作完成!\n\n已重命名的文件: {renamed_count}\n未修改的文件: {skipped_count}"
+        if renamed_count > 0:
+            QMessageBox.information(self, "操作完成", result_msg)
+        else:
+            QMessageBox.warning(self, "操作完成", result_msg + "\n\n未找到需要重命名的文件。")
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = FileRenamerApp(root)
-    root.mainloop()    
+    # 确保中文显示正常
+    os.environ["QT_FONT_DPI"] = "96"
+    
+    app = QApplication(sys.argv)
+    window = FileRenamerApp()
+    window.show()
+    sys.exit(app.exec_())    
