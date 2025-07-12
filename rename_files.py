@@ -9,6 +9,15 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QTimer, QRect, QRectF
 from PyQt5.QtGui import (QFont, QColor, QPalette, QPainter, QPen, QBrush, 
                         QIcon, QPixmap, QLinearGradient, QPainterPath, QRegion)
 
+def get_real_exe_path():
+    """获取打包后的exe实际路径（解决PyInstaller临时目录问题）"""
+    if getattr(sys, 'frozen', False):
+        # 打包后的环境
+        return os.path.dirname(sys.executable)
+    else:
+        # 开发环境
+        return os.path.dirname(os.path.abspath(__file__))
+
 class RenameThread(QThread):
     """文件重命名线程，用于后台执行重命名操作，避免界面卡顿"""
     log_signal = pyqtSignal(str)
@@ -167,7 +176,7 @@ class FileRenamerApp(AcrylicWidget):
         
         # 初始化
         self.rename_thread = None
-        self.default_dir = os.path.dirname(os.path.abspath(__file__))
+        self.default_dir = get_real_exe_path()  # 使用新函数获取真实路径
         self.dir_path.setText(self.default_dir)
         self.log_text.append("欢迎使用文件重命名工具")
         self.log_text.append(f"默认目录: {self.default_dir}")
