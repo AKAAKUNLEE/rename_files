@@ -4,9 +4,10 @@ import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                             QRadioButton, QCheckBox, QFileDialog, QTextEdit, 
-                            QStatusBar, QGroupBox, QMessageBox)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont
+                            QStatusBar, QGroupBox, QMessageBox, QGraphicsBlurEffect)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QTimer, QRect
+from PyQt5.QtGui import (QFont, QColor, QPalette, QPainter, QPen, QBrush, 
+                        QIcon, QPixmap, QLinearGradient, QPainterPath, QRegion)
 
 class RenameThread(QThread):
     """文件重命名线程，用于后台执行重命名操作，避免界面卡顿"""
@@ -87,14 +88,62 @@ class RenameThread(QThread):
             self.log_signal.emit(f"错误: {str(e)}")
             self.status_signal.emit(f"操作失败: {str(e)}")
 
-class FileRenamerApp(QMainWindow):
+class AcrylicWidget(QWidget):
+    """实现亚克力效果的基础窗口类"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        
+        # 亚克力效果参数
+        self.blur_radius = 15
+        self.acrylic_color = QColor(240, 240, 240, 180)  # RGBA
+        self.border_radius = 15
+        
+        # 窗口拖动支持
+        self.dragging = False
+        self.drag_position = QPoint()
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 创建路径并绘制亚克力背景
+        path = QPainterPath()
+        path.addRoundedRect(QRect(0, 0, self.width(), self.height()), 
+                           self.border_radius, self.border_radius)
+        
+        # 绘制半透明背景
+        painter.fillPath(path, self.acrylic_color)
+        
+        # 绘制边框
+        pen = QPen(QColor(255, 255, 255, 100), 2)
+        painter.setPen(pen)
+        painter.drawPath(path)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = True
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self.dragging and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPos() - self.drag_position)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
+        event.accept()
+
+class FileRenamerApp(AcrylicWidget):
     """文件重命名工具主窗口"""
     def __init__(self):
         super().__init__()
         
         # 设置窗口标题和大小
         self.setWindowTitle("文件重命名工具")
-        self.setGeometry(100, 100, 700, 500)
+        self.resize(700, 500)
         
         # 设置中文字体
         font = QFont()
@@ -102,17 +151,13 @@ class FileRenamerApp(QMainWindow):
         font.setPointSize(10)
         self.setFont(font)
         
-        # 创建中心部件和布局
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
-        
-        # 创建状态栏
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("就绪")
+        # 创建主布局
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout.setSpacing(15)
         
         # 创建UI组件
+        self.create_title_bar()
         self.create_directory_section()
         self.create_mode_section()
         self.create_options_section()
@@ -127,13 +172,81 @@ class FileRenamerApp(QMainWindow):
         self.log_text.append(f"默认目录: {self.default_dir}")
         self.log_text.append("请选择重命名模式，然后点击'开始重命名'按钮")
     
+    def create_title_bar(self):
+        """创建标题栏"""
+        title_layout = QHBoxLayout()
+        
+        self.title_label = QLabel("文件重命名工具")
+        self.title_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #333;")
+        
+        # 关闭按钮
+        self.close_btn = QPushButton("×")
+        self.close_btn.setFixedSize(25, 25)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff6b6b;
+                color: white;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #ff4757;
+            }
+        """)
+        self.close_btn.clicked.connect(self.close)
+        
+        # 最小化按钮
+        self.minimize_btn = QPushButton("−")
+        self.minimize_btn.setFixedSize(25, 25)
+        self.minimize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffd166;
+                color: white;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #ffc107;
+            }
+        """)
+        self.minimize_btn.clicked.connect(self.showMinimized)
+        
+        title_layout.addWidget(self.title_label)
+        title_layout.addStretch(1)
+        title_layout.addWidget(self.minimize_btn)
+        title_layout.addWidget(self.close_btn)
+        
+        self.main_layout.addLayout(title_layout)
+    
     def create_directory_section(self):
         """创建目录选择部分"""
         dir_layout = QHBoxLayout()
         
         self.dir_label = QLabel("选择目录:")
+        self.dir_label.setStyleSheet("font-weight: bold;")
+        
         self.dir_path = QLineEdit()
+        self.dir_path.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 0.8);
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
+        
         self.browse_btn = QPushButton("浏览...")
+        self.browse_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a69bd;
+                color: white;
+                border-radius: 5px;
+                padding: 5px 10px;
+            }
+            QPushButton:hover {
+                background-color: #3c6382;
+            }
+        """)
         self.browse_btn.clicked.connect(self.browse_directory)
         
         dir_layout.addWidget(self.dir_label)
@@ -145,12 +258,44 @@ class FileRenamerApp(QMainWindow):
     def create_mode_section(self):
         """创建重命名模式选择部分"""
         mode_group = QGroupBox("重命名模式")
+        mode_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.6);
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+                font-weight: bold;
+            }
+        """)
+        
         mode_layout = QVBoxLayout()
         
         self.to_dot_radio = QRadioButton("将 '-part' 替换为 '.part'")
         self.to_dash_radio = QRadioButton("将 '.part' 替换为 '-part'")
         
         self.to_dot_radio.setChecked(True)
+        
+        # 设置单选按钮样式
+        radio_style = """
+            QRadioButton::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QRadioButton::indicator:checked {
+                image: url(:/icons/radio-checked.png);
+            }
+            QRadioButton::indicator:unchecked {
+                image: url(:/icons/radio-unchecked.png);
+            }
+        """
+        self.to_dot_radio.setStyleSheet(radio_style)
+        self.to_dash_radio.setStyleSheet(radio_style)
         
         mode_layout.addWidget(self.to_dot_radio)
         mode_layout.addWidget(self.to_dash_radio)
@@ -161,11 +306,43 @@ class FileRenamerApp(QMainWindow):
     def create_options_section(self):
         """创建选项部分"""
         options_group = QGroupBox("选项")
+        options_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.6);
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+                font-weight: bold;
+            }
+        """)
+        
         options_layout = QHBoxLayout()
         
         self.recursive_check = QCheckBox("递归处理子目录")
         self.dry_run_check = QCheckBox("模拟运行（不实际修改文件）")
         self.dry_run_check.setChecked(True)
+        
+        # 设置复选框样式
+        check_style = """
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QCheckBox::indicator:checked {
+                image: url(:/icons/check-checked.png);
+            }
+            QCheckBox::indicator:unchecked {
+                image: url(:/icons/check-unchecked.png);
+            }
+        """
+        self.recursive_check.setStyleSheet(check_style)
+        self.dry_run_check.setStyleSheet(check_style)
         
         options_layout.addWidget(self.recursive_check)
         options_layout.addWidget(self.dry_run_check)
@@ -178,9 +355,19 @@ class FileRenamerApp(QMainWindow):
         log_layout = QVBoxLayout()
         
         self.log_label = QLabel("操作日志:")
+        self.log_label.setStyleSheet("font-weight: bold;")
+        
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setMinimumHeight(200)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(255, 255, 255, 0.8);
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
         
         log_layout.addWidget(self.log_label)
         log_layout.addWidget(self.log_text)
@@ -193,12 +380,38 @@ class FileRenamerApp(QMainWindow):
         
         self.rename_btn = QPushButton("开始重命名")
         self.rename_btn.setMinimumHeight(40)
-        self.rename_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.rename_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
         self.rename_btn.clicked.connect(self.start_rename)
         
         self.exit_btn = QPushButton("退出")
         self.exit_btn.setMinimumHeight(40)
-        self.exit_btn.setStyleSheet("background-color: #f44336; color: white; font-weight: bold;")
+        self.exit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
         self.exit_btn.clicked.connect(self.close)
         
         buttons_layout.addStretch(1)
@@ -225,7 +438,9 @@ class FileRenamerApp(QMainWindow):
     
     def update_status(self, message):
         """更新状态栏消息"""
-        self.statusBar.showMessage(message)
+        # 由于无边框窗口没有默认状态栏，这里可以考虑添加一个自定义状态栏
+        # 简化处理，使用日志显示
+        self.log_message(f"[状态] {message}")
     
     def start_rename(self):
         """开始重命名操作"""
@@ -268,7 +483,24 @@ if __name__ == "__main__":
     # 确保中文显示正常
     os.environ["QT_FONT_DPI"] = "96"
     
+    # 启用高DPI支持
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    
     app = QApplication(sys.argv)
+    
+    # 设置应用全局样式
+    app.setStyleSheet("""
+        QToolTip {
+            background-color: rgba(255, 255, 255, 220);
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 5px;
+        }
+    """)
+    
     window = FileRenamerApp()
     window.show()
     sys.exit(app.exec_())    
