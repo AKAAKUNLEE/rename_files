@@ -24,7 +24,10 @@ class FileRenamerApp:
         # 源目录选择
         ttk.Label(main_frame, text="选择目录:").grid(row=0, column=0, sticky=tk.W, pady=5)
         
-        self.dir_var = tk.StringVar(value=os.getcwd())
+        # 获取程序所在目录作为默认值
+        self.default_dir = os.path.dirname(os.path.abspath(__file__))
+        self.dir_var = tk.StringVar(value=self.default_dir)
+        
         dir_entry = ttk.Entry(main_frame, textvariable=self.dir_var, width=50)
         dir_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         
@@ -85,7 +88,8 @@ class FileRenamerApp:
         
         # 初始化日志
         self.log("欢迎使用文件重命名工具")
-        self.log("请选择目录和重命名模式，然后点击'开始重命名'按钮")
+        self.log(f"默认目录: {self.default_dir}")
+        self.log("请选择重命名模式，然后点击'开始重命名'按钮")
     
     def browse_directory(self):
         """浏览并选择目录"""
