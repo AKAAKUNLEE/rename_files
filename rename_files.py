@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QLineEdit, QPushButton, 
@@ -41,12 +42,12 @@ class RenameThread(QThread):
             self.new_str = '-part'
             self.mode_desc = "将 '.part' 替换为 '-part'"
         elif mode == 'rev-to-rar':
-            self.old_str = '.part'  # 用于匹配 .part01.rev
-            self.new_str = '-part'  # 用于替换为 -part01.rar
+            self.old_str = '.part'  # 用于匹配 .partXX.rev
+            self.new_str = '-part'  # 用于替换为 -partXX.rar
             self.mode_desc = "将 '.partXX.rev' 替换为 '-partXX.rar'"
         elif mode == 'rar-to-rev':
-            self.old_str = '-part'  # 用于匹配 -part01.rar
-            self.new_str = '.part'  # 用于替换为 .part01.rev
+            self.old_str = '-part'  # 用于匹配 -partXX.rar
+            self.new_str = '.part'  # 用于替换为 .partXX.rev
             self.mode_desc = "将 '-partXX.rar' 替换为 '.partXX.rev'"
         
     def run(self):
@@ -98,50 +99,58 @@ class RenameThread(QThread):
                             skipped_count += 1
                     
                     elif self.mode in ['rev-to-rar', 'rar-to-rev']:
-                        # 复杂替换：.part01.rev ↔ -part01.rar
-                        if self.mode == 'rev-to-rar' and filename.endswith('.rev') and self.old_str in filename:
-                            # 从 .part01.rev 转换为 -part01.rar
-                            base_part = filename.rsplit('.', 2)[0]  # 获取 "filename.part01"
-                            new_filename = base_part.replace(self.old_str, self.new_str) + '.rar'
-                            new_name = os.path.join(root, new_filename)
-                            
-                            if new_name == old_name:
-                                skipped_count += 1
-                                continue
+                        # 使用正则表达式处理 .partXX.rev ↔ -partXX.rar
+                        if self.mode == 'rev-to-rar':
+                            # 匹配 .partXX.rev 格式
+                            match = re.search(r'(.+)(\.part)(\d+)(\.rev)$', filename)
+                            if match:
+                                base_name = match.group(1)
+                                part_number = match.group(3)
+                                new_filename = f"{base_name}-part{part_number}.rar"
+                                new_name = os.path.join(root, new_filename)
                                 
-                            try:
-                                if self.dry_run:
-                                    log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
-                                    self.log_signal.emit(log_msg)
-                                else:
-                                    os.rename(old_name, new_name)
-                                    self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
-                                    renamed_count += 1
-                            except Exception as e:
-                                self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                                if new_name == old_name:
+                                    skipped_count += 1
+                                    continue
+                                    
+                                try:
+                                    if self.dry_run:
+                                        log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
+                                        self.log_signal.emit(log_msg)
+                                    else:
+                                        os.rename(old_name, new_name)
+                                        self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
+                                        renamed_count += 1
+                                except Exception as e:
+                                    self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                            else:
+                                skipped_count += 1
                         
-                        elif self.mode == 'rar-to-rev' and filename.endswith('.rar') and self.old_str in filename:
-                            # 从 -part01.rar 转换为 .part01.rev
-                            base_part = filename.rsplit('.', 1)[0]  # 获取 "filename-part01"
-                            new_filename = base_part.replace(self.old_str, self.new_str) + '.rev'
-                            new_name = os.path.join(root, new_filename)
-                            
-                            if new_name == old_name:
-                                skipped_count += 1
-                                continue
+                        elif self.mode == 'rar-to-rev':
+                            # 匹配 -partXX.rar 格式
+                            match = re.search(r'(.+)(-part)(\d+)(\.rar)$', filename)
+                            if match:
+                                base_name = match.group(1)
+                                part_number = match.group(3)
+                                new_filename = f"{base_name}.part{part_number}.rev"
+                                new_name = os.path.join(root, new_filename)
                                 
-                            try:
-                                if self.dry_run:
-                                    log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
-                                    self.log_signal.emit(log_msg)
-                                else:
-                                    os.rename(old_name, new_name)
-                                    self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
-                                    renamed_count += 1
-                            except Exception as e:
-                                self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
-                        else:
-                            skipped_count += 1
+                                if new_name == old_name:
+                                    skipped_count += 1
+                                    continue
+                                    
+                                try:
+                                    if self.dry_run:
+                                        log_msg = f"模拟: 将 '{filename}' 重命名为 '{new_filename}'"
+                                        self.log_signal.emit(log_msg)
+                                    else:
+                                        os.rename(old_name, new_name)
+                                        self.log_signal.emit(f"已重命名: {filename} -> {new_filename}")
+                                        renamed_count += 1
+                                except Exception as e:
+                                    self.log_signal.emit(f"错误: 无法重命名 '{filename}': {str(e)}")
+                            else:
+                                skipped_count += 1
             
             # 输出统计信息
             self.log_signal.emit("-" * 50)
@@ -422,7 +431,7 @@ class FileRenamerApp(AcrylicWidget):
             }
             QCheckBox::indicator:checked {
                 background-color: #4a69bd;
-                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTE0LjI4MyAyLjI4M0w2LjAwMyAxMC4wNjNsLTMuMjgzLTMuMjgzQzIuMjgzIDYuNDQzIDIuMDM3IDYuMjk3IDEuNzUgNi4yOTdDMS40NjMgNi4yOTcgMS4yMTYgNi40NDQgMS4yMTYgNi43MDFjMCAwLjI1NyAwLjI0NyAwLjUwMyAwLjUyNyAwLjUwM2MwLjIxNyAwIDAuNDE4LTAuMDkzIDAuNTczLTAuMjU0bDIuNzYgMi43NjdDNS41NjMgMTAuOTMzIDUuNzYzIDExIDYgMTFjMC4yMzYgMCAwLjQzNy0wLjA2NyAwLjU5My0wLjIwN2w3Ljc3LTEwLjU1M2MwLjE5LS4yNjMuMTctMC42MDYtMC4wNS0wLjgzM2MtMC4yMi0wLjIyLTAuNTctMC4yNC0wLjgzLTAuMDVMMTYgMy45NjdjMC4xOSAwLjIzIDAuMTkgMC42MSAwIDAuODQzTDYuODAzIDE1LjI3N2MtMC4yMDMuMjEtMC41NDUuMjEtMC43NDggMGwtNC4wNjMtNC4wNjRjLTAuMjEtMC4yMS0wLjIxLTAuNTU0IDAtMC43NjRjMC4yMS0wLjIxIDAuNTU0LTAuMjEgMC43NjQgMEw2IDExLjI1N2w3LjU4LTAuMDQzTDkuMjE1IDQuMjA0bC0wLjAwMi0wLjAwMnoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=);
+                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTE0LjI4MyAyLjI4M0w2LjAwMyAxMC4wNjNsLTMuMjgzLTMuMjgzQzIuMjgzIDYuNDQzIDIuMDM3IDYuMjk3IDEuNzUgNi4yOTdDMS40NjMgNi4yOTcgMS4yMSA2LjQ0NCAxLjIxIDYuNzAxYzAgMC4yNTcgMC4yNDcgMC41MDMgMC41MjcgMC41MDNjMC4yMTcgMCAwLjQxOC0wLjA5MyAwLjU3My0wLjI1NGwyLjc2IDIuNzY3QzUuNTYzIDEwLjkzMyA1Ljc2MyAxMSA2IDExYzAuMjM2IDAgMC40MzctMC4wNjcgMC41OTMtMC4yMDdsNy43Ny0xMC41NTNjMC4xOS0uMjYzIDAuMTctMC42MDYtMC4wNS0wLjgzM2MtMC4yMi0wLjIyLTAuNTctMC4yNC0wLjgzLTAuMDVMMTYgMy45NjdjMC4xOSAwLjIzIDAuMTkgMC42MSAwIDAuODQzTDYuODAzIDE1LjI3N2MtMC4yMDMuMjEtMC41NDUuMjEtMC43NDggMGwtNC4wNjMtNC4wNjRjLTAuMjEtMC4yMS0wLjIxLTAuNTU0IDAtMC43NjRjMC4yMS0wLjIxIDAuNTU0LTAuMjEgMC43NjQgMEw2IDExLjI1N2w3LjU4LTAuMDQzTDkuMjE1IDQuMjA0bC0wLjAwMi0wLjAwMnoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=);
             }
             QCheckBox::indicator:unchecked {
                 background-color: transparent;
