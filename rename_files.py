@@ -282,7 +282,7 @@ class FileRenamerApp(AcrylicWidget):
         
         self.to_dot_radio.setChecked(True)
         
-        # 修复单选按钮样式，使用系统默认图标
+        # 修复单选按钮样式
         radio_style = """
             QRadioButton::indicator {
                 width: 18px;
@@ -334,17 +334,20 @@ class FileRenamerApp(AcrylicWidget):
         self.dry_run_check = QCheckBox("模拟运行（不实际修改文件）")
         self.dry_run_check.setChecked(True)
         
-        # 修复复选框样式，使用系统默认图标
+        # 使用纯CSS重新实现复选框样式，不依赖图标
         check_style = """
             QCheckBox::indicator {
                 width: 18px;
                 height: 18px;
+                border: 2px solid #4a69bd;
+                border-radius: 3px;
             }
             QCheckBox::indicator:checked {
-                image: url(:/qt-project.org/styles/commonstyle/images/checkbox-checked.png);
+                background-color: #4a69bd;
+                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTE0LjI4MyAyLjI4M0w2LjAwMyAxMC4wNjNsLTMuMjgzLTMuMjgzQzIuMjgzIDYuNDQzIDIuMDM3IDYuMjk3IDEuNzUgNi4yOTdDMS40NjMgNi4yOTcgMS4yMTYgNi40NDQgMS4yMTYgNi43MDFjMCAwLjI1NyAwLjI0NyAwLjUwMyAwLjUyNyAwLjUwM2MwLjIxNyAwIDAuNDE4LTAuMDkzIDAuNTczLTAuMjU0bDIuNzYgMi43NjdDNS41NjMgMTAuOTMzIDUuNzYzIDExIDYgMTFjMC4yMzYgMCAwLjQzNy0wLjA2NyAwLjU5My0wLjIwN2w3Ljc3LTEwLjU1M2MwLjE5LS4yNjMuMTctMC42MDYtMC4wNS0wLjgzM2MtMC4yMi0wLjIyLTAuNTctMC4yNC0wLjgzLTAuMDVMMTYgMy45NjdjMC4xOSAwLjIzIDAuMTkgMC42MSAwIDAuODQzTDYuODAzIDE1LjI3N2MtMC4yMDMuMjEtMC41NDUuMjEtMC43NDggMGwtNC4wNjMtNC4wNjRjLTAuMjEtMC4yMS0wLjIxLTAuNTU0IDAtMC43NjRjMC4yMS0wLjIxIDAuNTU0LTAuMjEgMC43NjQgMEw2IDExLjI1N2w3LjU4LTAuMDQzTDkuMjE1IDQuMjA0bC0wLjAwMi0wLjAwMnoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=);
             }
             QCheckBox::indicator:unchecked {
-                image: url(:/qt-project.org/styles/commonstyle/images/checkbox-unchecked.png);
+                background-color: transparent;
             }
         """
         self.recursive_check.setStyleSheet(check_style)
